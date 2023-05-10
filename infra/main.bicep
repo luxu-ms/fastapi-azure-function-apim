@@ -1,13 +1,11 @@
-targetScope = 'subscription'
-
 @minLength(1)
 @maxLength(64)
 @description('Name which is used to generate a short unique hash for each resource')
-param name string
+param environmentName string = 'test'
 
 @minLength(1)
 @description('Primary location for all resources')
-param location string
+param location string = resourceGroup().location
 
 @description('The email address of the owner of the service')
 @minLength(1)
@@ -17,26 +15,19 @@ param publisherEmail string
 @minLength(1)
 param publisherName string
 
-var resourceToken = toLower(uniqueString(subscription().id, name, location))
-var tags = { 'azd-env-name': name }
+var resourceToken = toLower(uniqueString(resourceGroup().id, location))
+var tags = { 'azd-env-name': environmentName }
 
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: '${name}-rg'
-  location: location
-  tags: tags
-}
-
-var prefix = '${name}-${resourceToken}'
+var prefix = '${environmentName}-${resourceToken}'
 
 // Monitor application with Azure Monitor
 module monitoring './core/monitor/monitoring.bicep' = {
   name: 'monitoring'
-  scope: resourceGroup
   params: {
     location: location
     tags: tags
-    logAnalyticsName: '${prefix}-logworkspace'
-    applicationInsightsName: '${prefix}-appinsights'
+    logAnalyticsName: 'log-${prefix}'
+    applicationInsightsName: 'appi-${prefix}'
     applicationInsightsDashboardName: 'appinsights-dashboard'
   }
 }
@@ -45,7 +36,6 @@ module monitoring './core/monitor/monitoring.bicep' = {
 var validStoragePrefix = toLower(take(replace(prefix, '-', ''), 17))
 module storageAccount 'core/storage/storage-account.bicep' = {
   name: 'storage'
-  scope: resourceGroup
   params: {
     name: '${validStoragePrefix}storage'
     location: location
@@ -57,9 +47,8 @@ module storageAccount 'core/storage/storage-account.bicep' = {
 // Create an App Service Plan to group applications under the same payment plan and SKU
 module appServicePlan './core/host/appserviceplan.bicep' = {
   name: 'appserviceplan'
-  scope: resourceGroup
   params: {
-    name: '${prefix}-plan'
+    name: 'plan-${prefix}'
     location: location
     tags: tags
     sku: {
@@ -71,10 +60,9 @@ module appServicePlan './core/host/appserviceplan.bicep' = {
 
 module functionApp 'core/host/functions.bicep' = {
   name: 'function'
-  scope: resourceGroup
   params: {
     // Truncating to 32 due to https://github.com/Azure/azure-functions-host/issues/2015
-    name: '${take(prefix, 19)}-function-app'
+    name: 'func-${take(prefix, 19)}'
     location: location
     tags: union(tags, { 'azd-service-name': 'api' })
     alwaysOn: false
@@ -93,9 +81,8 @@ module functionApp 'core/host/functions.bicep' = {
 // Creates Azure API Management (APIM) service to mediate the requests between the frontend and the backend API
 module apim './core/gateway/apim.bicep' = {
   name: 'apim-deployment'
-  scope: resourceGroup
   params: {
-    name: '${prefix}-function-app-apim'
+    name: 'apim-${prefix}'
     location: location
     tags: tags
     applicationInsightsName: monitoring.outputs.applicationInsightsName
@@ -107,7 +94,6 @@ module apim './core/gateway/apim.bicep' = {
 // Configures the API in the Azure API Management (APIM) service
 module apimAPI 'apimanagement.bicep' = {
   name: 'apimanagement-resources'
-  scope: resourceGroup
   params: {
     apimServiceName: apim.outputs.apimServiceName
     functionAppName: functionApp.outputs.name
