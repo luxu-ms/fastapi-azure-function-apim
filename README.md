@@ -15,6 +15,7 @@ You can develop and deploy a function app using either Visual Studio Code or the
 2. Use VSCode to open "fastapi-azure-function-apim"
 
 3. Go to Azure Tools, in the WORKSPACE, select "local Project", click "upload" icon, select "Deploy to Function App..."
+
 ![Deploy to Function App](assets/deploy-function.png)
 
 4. Click "fastapi-azure-function-apim" in the "folder to deploy" list, select the subscription, select the function app provisioned, click "Deploy"
